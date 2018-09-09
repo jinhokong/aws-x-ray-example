@@ -1,16 +1,14 @@
 "use strict";
-var AWSXRay = require("aws-xray-sdk-core");
-var AWS = AWSXRay.captureAWS(require("aws-sdk"));
-var s3 = new AWS.S3();
-var docClient = new AWS.DynamoDB.DocumentClient();
+const AWSXRay = require("aws-xray-sdk-core");
+const AWS = AWSXRay.captureAWS(require("aws-sdk"));
+const s3 = new AWS.S3();
+const docClient = new AWS.DynamoDB.DocumentClient();
+const sqs = new AWS.SQS();
 
 export const hello = function(event, context, callback) {
-  //console.log("ENV: "+process.env.AWS_XRAY_DAEMON_ADDRESS);
-
-  // Try to upload to a bucket that does not exist - will Fail
   AWSXRay.captureAsyncFunc("Put to doesnotexistbucket", function(subsegment) {
-    var params = {
-      Bucket: "awsgeorge-2",
+    const params = {
+      Bucket: "awsgeorge-2-error",
       Key: "key",
       Body: "mybody"
     };
@@ -25,9 +23,8 @@ export const hello = function(event, context, callback) {
     });
   });
 
-  // Upload to a bucket that exists - IAM role does not provide permissions to -- will fail
   AWSXRay.captureAsyncFunc("Put to awsgeorge", function(subsegment) {
-    var params = {
+    const params = {
       Bucket: "awsgeorge-1",
       Key: "key",
       Body: "mybody"
@@ -42,19 +39,40 @@ export const hello = function(event, context, callback) {
     });
   });
 
-  // Perform a DDB Scan - will succeed
-  var params = {
-    TableName: "Buckets"
-  };
+  AWSXRay.captureAsyncFunc("dynamo-DB", function(subsegment) {
+    const params = {
+      TableName: "Buckets",
+      Item: {
+        key: "key" + Date.now()
+      }
+    };
+    docClient.put(params, function(err, data) {
+      if (err) {
+        subsegment.addAnnotation("error", "error");
+        subsegment.addMetadata("error", err.stack);
+        console.log("Error", err);
+      } else {
+        console.log(data);
+      }
+      subsegment.close();
+    });
+  });
+  AWSXRay.captureAsyncFunc("SQS", function(subsegment) {
+    const sqsParams = {
+      MessageBody: "SQS is work",
+      QueueUrl: "https://sqs.us-east-1.amazonaws.com/600625560026/XRaySqs"
+    };
 
-  docClient.scan(params, function(err, data) {
-    if (err) {
-      console.log("Error", err);
-    } else {
-      data.Items.forEach(function(element, index, array) {
-        console.log(element);
-      });
-    }
+    sqs.sendMessage(sqsParams, (err, data) => {
+      if (err) {
+        subsegment.addAnnotation("error", "error");
+        subsegment.addMetadata("error", err.stack);
+        console.log("Error", err);
+      } else {
+        console.log(data);
+      }
+      subsegment.close();
+    });
   });
 
   callback(null, { body: "success!!!" });
