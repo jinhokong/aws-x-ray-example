@@ -6,9 +6,9 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 const sqs = new AWS.SQS();
 
 export const hello = function(event, context, callback) {
-  AWSXRay.captureAsyncFunc("Put to doesnotexistbucket", function(subsegment) {
+  AWSXRay.captureAsyncFunc("throw Error", function(subsegment) {
     const params = {
-      Bucket: "awsgeorge-2-error",
+      Bucket: "awsgeorge-2",
       Key: "key",
       Body: "mybody"
     };
@@ -19,22 +19,6 @@ export const hello = function(event, context, callback) {
         subsegment.addMetadata("error", err.stack);
       }
 
-      subsegment.close();
-    });
-  });
-
-  AWSXRay.captureAsyncFunc("Put to awsgeorge", function(subsegment) {
-    const params = {
-      Bucket: "awsgeorge-1",
-      Key: "key",
-      Body: "mybody"
-    };
-
-    s3.putObject(params, function(err, data) {
-      if (err) {
-        subsegment.addAnnotation("error", "error");
-        subsegment.addMetadata("error", err.stack);
-      }
       subsegment.close();
     });
   });
